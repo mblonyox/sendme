@@ -1,7 +1,13 @@
 import { decodeBase64, encodeBase64 } from "$std/encoding/base64.ts";
 
+function* chunks(arr: Uint8Array, n: number): Generator<Uint8Array, void> {
+  for (let i = 0; i < arr.length; i += n) {
+    yield arr.slice(i, i + n);
+  }
+}
+
 const ALGORITHM = "RSA-OAEP";
-const HASH = "SHA-256";
+const HASH = "SHA-512";
 
 export const generateKey = () =>
   crypto.subtle.generateKey(
@@ -27,16 +33,32 @@ export const importPublicKey = (jsonPublicKey: JsonWebKey) =>
     ["encrypt"],
   );
 
-export const encrypt = (publicKey: CryptoKey, payload: string) =>
-  crypto.subtle.encrypt(
-    { name: ALGORITHM },
-    publicKey,
-    new TextEncoder().encode(payload),
-  ).then((buffer) => encodeBase64(buffer));
+export const encrypt = async (publicKey: CryptoKey, payload: string) => {
+  const buffer = new TextEncoder().encode(payload);
+  const chunked = Array.from(chunks(buffer, 190));
+  const encrypteds = await Promise.all(
+    chunked.map((chunk) =>
+      crypto.subtle.encrypt(
+        { name: ALGORITHM },
+        publicKey,
+        chunk,
+      ).then((bytes) => encodeBase64(bytes))
+    ),
+  );
+  return encrypteds.join("\n");
+};
 
-export const decrypt = (privateKey: CryptoKey, cipher: string) =>
-  crypto.subtle.decrypt(
-    { name: ALGORITHM },
-    privateKey,
-    decodeBase64(cipher),
-  ).then((buffer) => new TextDecoder().decode(buffer));
+export const decrypt = async (privateKey: CryptoKey, cipher: string) => {
+  const decrypteds = await Promise.all(
+    cipher.split("\n")
+      .map((text) => decodeBase64(text))
+      .map((bytes) =>
+        crypto.subtle.decrypt(
+          { name: ALGORITHM },
+          privateKey,
+          bytes,
+        ).then((bytes) => new TextDecoder().decode(bytes))
+      ),
+  );
+  return decrypteds.join("");
+};
