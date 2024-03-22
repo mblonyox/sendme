@@ -50,6 +50,9 @@ export default function Client() {
               [id]: { ...peer, status: "online" },
             };
           };
+          setInterval(() => {
+            channel.send("ping");
+          }, 1000);
         }
       },
     );
