@@ -1,4 +1,5 @@
 import { defineRoute } from "$fresh/server.ts";
+import Client from "../islands/Client.tsx";
 
 export default defineRoute(() => {
   return (
@@ -24,12 +25,7 @@ export default defineRoute(() => {
         </p>
       </section>
       <section>
-        <h2>How to use?</h2>
-        <p>Choose between receiving or sending the files.</p>
-        <div className="grid">
-          <a className="contrast" role="button" href="/receive">Receive</a>
-          <a role="button" href="/send">Send</a>
-        </div>
+        <Client />
       </section>
     </>
   );

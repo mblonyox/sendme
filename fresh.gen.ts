@@ -4,23 +4,27 @@
 
 import * as $_404 from "./routes/_404.tsx";
 import * as $_app from "./routes/_app.tsx";
+import * as $_middleware from "./routes/_middleware.ts";
 import * as $about from "./routes/about.tsx";
 import * as $index from "./routes/index.tsx";
-import * as $receive from "./routes/receive.tsx";
-import * as $send from "./routes/send.tsx";
-
+import * as $Client from "./islands/Client.tsx";
+import * as $Downloader from "./islands/Downloader.tsx";
+import * as $Uploader from "./islands/Uploader.tsx";
 import { type Manifest } from "$fresh/server.ts";
 
 const manifest = {
   routes: {
     "./routes/_404.tsx": $_404,
     "./routes/_app.tsx": $_app,
+    "./routes/_middleware.ts": $_middleware,
     "./routes/about.tsx": $about,
     "./routes/index.tsx": $index,
-    "./routes/receive.tsx": $receive,
-    "./routes/send.tsx": $send,
   },
-  islands: {},
+  islands: {
+    "./islands/Client.tsx": $Client,
+    "./islands/Downloader.tsx": $Downloader,
+    "./islands/Uploader.tsx": $Uploader,
+  },
   baseUrl: import.meta.url,
 } satisfies Manifest;
 

@@ -1,6 +1,6 @@
-import { defineApp, type PageProps } from "$fresh/server.ts";
+import { defineApp } from "$fresh/server.ts";
 
-export default defineApp((request, { Component }) => {
+export default defineApp((_request, { Component }) => {
   return (
     <html lang="en">
       <head>
@@ -24,14 +24,6 @@ export default defineApp((request, { Component }) => {
             <ul>
               <li>
                 <a href="/">Home</a>
-              </li>
-              <li>|</li>
-              <li>
-                <a href="/send">Send</a>
-              </li>
-              <li>|</li>
-              <li>
-                <a href="/receive">Receive</a>
               </li>
               <li>|</li>
               <li>
