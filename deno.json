@@ -41,7 +41,7 @@
     "broadcast-channel"
   ],
   "deploy": {
-    "project": "8913a499-23e8-4c1c-82bd-33f56d3ba84d",
+    "project": "6cc671c2-32f8-43bf-9318-ca7c526819f5",
     "exclude": [
       "**/node_modules"
     ],

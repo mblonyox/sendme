@@ -1,4 +1,4 @@
-import { ICE_SERVERS } from "./constants.ts";
+import { iceServers } from "./constants.ts";
 import { createSignaler, Signaler } from "./socket.ts";
 
 import { $peers } from "./state.ts";
@@ -18,7 +18,7 @@ const handleNegotiation = (
   let makingOffer = false;
   let ignoreOffer = false;
   pc.onicecandidate = async ({ candidate }) => {
-    if (candidate && pc.canTrickleIceCandidates) {
+    if (candidate) {
       await signaler.send({ candidate });
     }
   };
@@ -44,7 +44,7 @@ const handleNegotiation = (
 
         await pc.setRemoteDescription(description);
         if (description.type === "offer") {
-          await pc.setLocalDescription().catch(() => {});
+          await pc.setLocalDescription();
           signaler.send({ description: pc.localDescription });
         }
       } else if (candidate) {
@@ -65,9 +65,13 @@ const handleNegotiation = (
       pc.restartIce();
     }
   };
-  pc.addEventListener("connectionstatechange", () => {
-    if (pc.connectionState === "closed") signaler.destroy();
-  }, { once: true });
+  const onclose = () => {
+    if (pc.connectionState === "closed") {
+      signaler.destroy();
+      pc.removeEventListener("connectionstatechange", onclose);
+    }
+  };
+  pc.addEventListener("connectionstatechange", onclose);
 };
 
 const pingCheck = (pc: RTCPeerConnection) => {
@@ -84,13 +88,17 @@ const pingCheck = (pc: RTCPeerConnection) => {
   pingChannel.onclose = () => {
     clearInterval(timerId);
   };
-  pc.addEventListener("connectionstatechange", () => {
-    if (pc.connectionState === "closed") pingChannel.close();
-  }, { once: true });
+  const onclose = () => {
+    if (pc.connectionState === "closed") {
+      pingChannel.close();
+      pc.removeEventListener("connectionstatechange", onclose);
+    }
+  };
+  pc.addEventListener("connectionstatechange", onclose);
 };
 
 export const createPeerConnection = (socket: WebSocket, id: string) => {
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  const pc = new RTCPeerConnection({ iceServers });
   const { initiator } = $peers.peek()[id];
   const signaler = createSignaler(socket, id);
   handleNegotiation(pc, signaler, initiator);

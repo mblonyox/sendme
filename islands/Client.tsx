@@ -20,14 +20,12 @@ export default function Client() {
   useSignalEffect(() => {
     const socket = socketRef.current!;
     const peerIds = Object.keys($peers.value);
-    peerIds.forEach(
-      (id) => {
-        if (!pcMapRef.current.has(id)) {
-          const pc = createPeerConnection(socket, id);
-          pcMapRef.current.set(id, new WeakRef(pc));
-        }
-      },
-    );
+    for (const id of peerIds) {
+      if (!pcMapRef.current.has(id)) {
+        const pc = createPeerConnection(socket, id);
+        pcMapRef.current.set(id, new WeakRef(pc));
+      }
+    }
     for (const [id, ref] of pcMapRef.current.entries()) {
       if (!peerIds.includes(id)) ref.deref()?.close();
     }
