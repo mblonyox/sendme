@@ -161,8 +161,12 @@ export const registerServerSocketHandler = (socket: WebSocket) => {
   const id = nanoid();
   const globalChannel = new BroadcastChannel("global");
   const clientChannel = new BroadcastChannel(`client:${id}`);
-  globalChannel.onmessage = (event) => socket.send(JSON.stringify(event.data));
-  clientChannel.onmessage = (event) => socket.send(JSON.stringify(event.data));
+  socket.onopen = () => {
+    globalChannel.onmessage = (event) =>
+      socket.send(JSON.stringify(event.data));
+    clientChannel.onmessage = (event) =>
+      socket.send(JSON.stringify(event.data));
+  };
   socket.onmessage = (event) => {
     const result = clientMessageSchema.safeParse(JSON.parse(event.data));
     if (!result.success) return;
@@ -194,7 +198,15 @@ export const registerServerSocketHandler = (socket: WebSocket) => {
   };
   socket.onclose = () => {
     const message: ServerMessage = { type: "BYE", from: id };
-    globalChannel.postMessage(message);
+    try {
+      globalChannel.postMessage(message);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "InvalidStateError") {
+        const channel = new BroadcastChannel("global");
+        channel.postMessage(message);
+        channel.close();
+      }
+    }
     globalChannel.close();
     clientChannel.close();
   };

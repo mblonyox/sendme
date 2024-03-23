@@ -6,7 +6,7 @@ export const handler: MiddlewareHandler[] = [(req, ctx) => {
     ctx.destination === "route" &&
     req.headers.get("Upgrade") === "websocket"
   ) {
-    const { socket, response } = Deno.upgradeWebSocket(req);
+    const { socket, response } = Deno.upgradeWebSocket(req, { idleTimeout: 5 });
     registerServerSocketHandler(socket);
     return response;
   }
