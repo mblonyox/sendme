@@ -1,4 +1,4 @@
-import { names, uniqueNamesGenerator } from "npm:unique-names-generator";
+import { names, uniqueNamesGenerator } from "unique-names-generator";
 import { signal } from "@preact/signals";
 
 import { PeerInfo } from "./peer.ts";

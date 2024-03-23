@@ -1,5 +1,5 @@
-import { nanoid } from "npm:nanoid";
-import { z } from "npm:zod";
+import { nanoid } from "nanoid";
+import { z } from "zod";
 
 import { $name, $peers } from "./state.ts";
 import {

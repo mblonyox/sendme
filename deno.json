@@ -25,13 +25,27 @@
     "$std/": "https://deno.land/std@0.211.0/",
     "@preact/signals": "https://esm.sh/*@preact/signals@1.2.1",
     "@preact/signals-core": "https://esm.sh/*@preact/signals-core@1.5.0",
+    "nanoid": "https://esm.sh/nanoid@5.0.6?target=es2022",
+    "partysocket": "https://esm.sh/partysocket@1.0.1?target=es2022",
     "preact": "https://esm.sh/preact@10.19.2",
-    "preact/": "https://esm.sh/preact@10.19.2/"
+    "preact/": "https://esm.sh/preact@10.19.2/",
+    "unique-names-generator": "https://esm.sh/unique-names-generator@4.7.1",
+    "zod": "https://esm.sh/zod@3.22.4"
   },
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
   "nodeModulesDir": true,
-  "unstable": ["broadcast-channel"]
+  "unstable": [
+    "broadcast-channel"
+  ],
+  "deploy": {
+    "project": "8913a499-23e8-4c1c-82bd-33f56d3ba84d",
+    "exclude": [
+      "**/node_modules"
+    ],
+    "include": [],
+    "entrypoint": "main.ts"
+  }
 }

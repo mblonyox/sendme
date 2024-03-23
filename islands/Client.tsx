@@ -1,4 +1,4 @@
-import { WebSocket as ReconnectingWebSocket } from "npm:partysocket";
+import { WebSocket as ReconnectingWebSocket } from "partysocket";
 import { useSignalEffect } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
 
