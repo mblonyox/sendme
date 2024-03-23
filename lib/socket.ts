@@ -1,9 +1,15 @@
 import { nanoid } from "npm:nanoid";
 import { z } from "npm:zod";
-import { Signal } from "@preact/signals";
 
-import { decrypt, encrypt, exportKey, importPublicKey } from "./crypto.ts";
-import { PeerInfo } from "./peer.ts";
+import { $name, $peers } from "./state.ts";
+import {
+  decrypt,
+  encrypt,
+  exportKey,
+  importPublicKey,
+  privateKey,
+  publicKey,
+} from "./crypto.ts";
 
 const jwkSchema = z.record(z.any());
 
@@ -59,18 +65,13 @@ type Data = {
   candidate?: RTCIceCandidate | null;
 };
 
-export const createSignaler = async (
-  socket: WebSocket,
-  privateKey: CryptoKey,
-  id: string,
-  jwk: JsonWebKey,
-) => {
-  const publicKey = await importPublicKey(jwk);
+export const createSignaler = (socket: WebSocket, id: string) => {
+  const publicKey = importPublicKey($peers.peek()[id].publicKey);
   const send = async (data: Data) => {
     const candidate = data.candidate &&
-      await encrypt(publicKey, JSON.stringify(data.candidate));
+      await encrypt(await publicKey, JSON.stringify(data.candidate));
     const description = data.description &&
-      await encrypt(publicKey, JSON.stringify(data.description));
+      await encrypt(await publicKey, JSON.stringify(data.description));
     const message: ClientMessage = {
       type: "SIGNAL",
       to: id,
@@ -108,17 +109,12 @@ export const createSignaler = async (
   };
 };
 
-export const registerClientSocketHandler = async (
-  socket: WebSocket,
-  myPublicKey: CryptoKey,
-  myName: Signal<string>,
-  peers: Signal<Record<string, PeerInfo>>,
-) => {
-  const jwk = await exportKey(myPublicKey);
+export const registerClientSocketHandler = async (socket: WebSocket) => {
+  const jwk = await exportKey(publicKey);
   const onopen = () => {
     const message: ClientMessage = {
       type: "HI",
-      name: myName.peek(),
+      name: $name.peek(),
       publicKey: jwk,
     };
     socket.send(JSON.stringify(message));
@@ -129,26 +125,26 @@ export const registerClientSocketHandler = async (
     const data = result.data;
     if (data.type === "HI") {
       const { name, publicKey, from } = data;
-      peers.value = {
-        ...peers.peek(),
+      $peers.value = {
+        ...$peers.peek(),
         [from]: { name, publicKey, initiator: true },
       };
       const message: ClientMessage = {
         type: "HELLO",
         to: from,
-        name: myName.peek(),
+        name: $name.peek(),
         publicKey: jwk,
       };
       socket.send(JSON.stringify(message));
     }
     if (data.type === "HELLO") {
       const { name, publicKey, from } = data;
-      peers.value = { ...peers.peek(), [from]: { name, publicKey } };
+      $peers.value = { ...$peers.peek(), [from]: { name, publicKey } };
     }
     if (data.type === "BYE") {
-      const temp = peers.peek();
+      const temp = $peers.peek();
       delete temp[data.from];
-      peers.value = temp;
+      $peers.value = { ...temp };
     }
   };
   const onclose = () => {

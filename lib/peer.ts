@@ -1,5 +1,7 @@
 import { ICE_SERVERS } from "./constants.ts";
-import { Signaler } from "./socket.ts";
+import { createSignaler, Signaler } from "./socket.ts";
+
+import { $peers } from "./state.ts";
 
 export type PeerInfo = {
   name: string;
@@ -8,12 +10,18 @@ export type PeerInfo = {
   status?: string;
 };
 
-export const createPeerConnection = (signaler: Signaler, initiator = false) => {
+const handleNegotiation = (
+  pc: RTCPeerConnection,
+  signaler: Signaler,
+  initiator?: boolean,
+) => {
   let makingOffer = false;
   let ignoreOffer = false;
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-  pc.onicecandidate = ({ candidate }) =>
-    candidate && pc.canTrickleIceCandidates && signaler.send({ candidate });
+  pc.onicecandidate = async ({ candidate }) => {
+    if (candidate && pc.canTrickleIceCandidates) {
+      await signaler.send({ candidate });
+    }
+  };
   pc.onnegotiationneeded = async () => {
     try {
       makingOffer = true;
@@ -57,5 +65,44 @@ export const createPeerConnection = (signaler: Signaler, initiator = false) => {
       pc.restartIce();
     }
   };
+  pc.addEventListener("connectionstatechange", () => {
+    if (pc.connectionState === "closed") signaler.destroy();
+  }, { once: true });
+};
+
+const pingCheck = (pc: RTCPeerConnection) => {
+  let timerId: number;
+  const pingChannel = pc.createDataChannel("ping", { negotiated: true, id: 0 });
+  pingChannel.onopen = () => {
+    timerId = setInterval(() => {
+      pingChannel.send("ping");
+    }, 1000);
+  };
+  pingChannel.onmessage = (event) => {
+    if (event.data === "ping") pingChannel.send("pong");
+  };
+  pingChannel.onclose = () => {
+    clearInterval(timerId);
+  };
+  pc.addEventListener("connectionstatechange", () => {
+    if (pc.connectionState === "closed") pingChannel.close();
+  }, { once: true });
+};
+
+export const createPeerConnection = (socket: WebSocket, id: string) => {
+  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  const { initiator } = $peers.peek()[id];
+  const signaler = createSignaler(socket, id);
+  handleNegotiation(pc, signaler, initiator);
+  pingCheck(pc);
+  pc.addEventListener("connectionstatechange", () => {
+    const peers = $peers.peek();
+    if (peers[id]) {
+      $peers.value = {
+        ...peers,
+        [id]: { ...peers[id], status: pc.connectionState },
+      };
+    }
+  });
   return pc;
 };

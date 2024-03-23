@@ -7,7 +7,7 @@ function* chunks(arr: Uint8Array, n: number): Generator<Uint8Array, void> {
 }
 
 const ALGORITHM = "RSA-OAEP";
-const HASH = "SHA-512";
+const HASH = "SHA-256";
 
 export const generateKey = () =>
   crypto.subtle.generateKey(
@@ -62,3 +62,5 @@ export const decrypt = async (privateKey: CryptoKey, cipher: string) => {
   );
   return decrypteds.join("");
 };
+
+export const { privateKey, publicKey } = await generateKey();

@@ -1,61 +1,36 @@
-import { names, uniqueNamesGenerator } from "npm:unique-names-generator";
 import { WebSocket as ReconnectingWebSocket } from "npm:partysocket";
-import { signal, useSignalEffect } from "@preact/signals";
+import { useSignalEffect } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
 
 import { registerClientSocketHandler } from "../lib/socket.ts";
-import { generateKey } from "../lib/crypto.ts";
-import { PeerInfo } from "../lib/peer.ts";
 import { createPeerConnection } from "../lib/peer.ts";
-import { createSignaler } from "../lib/socket.ts";
-
-const $name = signal(uniqueNamesGenerator({ dictionaries: [names] }));
-const $peers = signal<Record<string, PeerInfo>>({});
-
-const { privateKey, publicKey } = await generateKey();
-const peerConnections = new Map<string, WeakRef<RTCPeerConnection>>();
+import { $name, $peers } from "../lib/state.ts";
 
 export default function Client() {
   const socketRef = useRef<WebSocket>();
+  const pcMapRef = useRef(new Map<string, WeakRef<RTCPeerConnection>>());
   useEffect(() => {
     const socket = new ReconnectingWebSocket(
       document.URL.replace("http", "ws"),
     ) as WebSocket;
-    registerClientSocketHandler(socket as WebSocket, publicKey, $name, $peers);
+    registerClientSocketHandler(socket as WebSocket);
     socketRef.current = socket;
     return () => socket.close();
   }, []);
   useSignalEffect(() => {
     const socket = socketRef.current!;
-    Object.entries($peers.value).forEach(
-      async ([id, peer]) => {
-        if (!peerConnections.has(id)) {
-          const { publicKey, initiator } = peer;
-          const signaler = await createSignaler(
-            socket,
-            privateKey,
-            id,
-            publicKey,
-          );
-          const pc = createPeerConnection(signaler, initiator);
-          peerConnections.set(id, new WeakRef(pc));
-          const channel = pc.createDataChannel("status", {
-            negotiated: true,
-            id: 0,
-          });
-          channel.onmessage = (event) => {
-            if (event.data === "ping") channel.send("pong");
-            $peers.value = {
-              ...$peers.peek(),
-              [id]: { ...peer, status: "online" },
-            };
-          };
-          setInterval(() => {
-            channel.send("ping");
-          }, 1000);
+    const peerIds = Object.keys($peers.value);
+    peerIds.forEach(
+      (id) => {
+        if (!pcMapRef.current.has(id)) {
+          const pc = createPeerConnection(socket, id);
+          pcMapRef.current.set(id, new WeakRef(pc));
         }
       },
     );
+    for (const [id, ref] of pcMapRef.current.entries()) {
+      if (!peerIds.includes(id)) ref.deref()?.close();
+    }
   });
 
   return (
