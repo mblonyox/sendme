@@ -1,15 +1,6 @@
+import { Signal, signal } from "@preact/signals";
 import { iceServers } from "./constants.ts";
-import { createSignaler, Signaler } from "./socket.ts";
-
-import { $peers } from "./state.ts";
-
-export type PeerInfo = {
-  name: string;
-  publicKey: JsonWebKey;
-  initiator?: boolean;
-  status?: string;
-  checked?: boolean;
-};
+import { Signaler } from "./socket.ts";
 
 const handleNegotiation = (
   pc: RTCPeerConnection,
@@ -98,20 +89,38 @@ const pingCheck = (pc: RTCPeerConnection) => {
   pc.addEventListener("connectionstatechange", onclose);
 };
 
-export const createPeerConnection = (socket: WebSocket, id: string) => {
-  const pc = new RTCPeerConnection({ iceServers });
-  const { initiator } = $peers.peek()[id];
-  const signaler = createSignaler(socket, id);
-  handleNegotiation(pc, signaler, initiator);
-  pingCheck(pc);
-  pc.addEventListener("connectionstatechange", () => {
-    const peers = $peers.peek();
-    if (peers[id]) {
-      $peers.value = {
-        ...peers,
-        [id]: { ...peers[id], status: pc.connectionState },
-      };
+const handleStateUpdate = (pc: RTCPeerConnection, state: Signal<string>) => {
+  const handler = () => {
+    state.value = pc.connectionState;
+    if (pc.connectionState === "closed") {
+      pc.removeEventListener("connectionstatechange", handler);
     }
-  });
-  return pc;
+  };
+  pc.addEventListener("connectionstatechange", handler);
 };
+
+export class Peer {
+  private pc: RTCPeerConnection;
+  name: Signal<string>;
+  state: Signal<string>;
+  selected: Signal<boolean>;
+
+  constructor(
+    public id: string,
+    name: string,
+    signaler: Signaler,
+    initiator?: boolean,
+  ) {
+    this.pc = new RTCPeerConnection({ iceServers });
+    this.name = signal(name);
+    this.state = signal(this.pc.connectionState);
+    this.selected = signal(false);
+    handleNegotiation(this.pc, signaler, initiator);
+    handleStateUpdate(this.pc, this.state);
+    pingCheck(this.pc);
+  }
+
+  close() {
+    this.pc.close();
+  }
+}

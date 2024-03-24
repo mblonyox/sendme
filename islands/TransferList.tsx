@@ -2,6 +2,7 @@ import { $transfers } from "../lib/state.ts";
 
 export default function TransferList() {
   const transfers = Object.entries($transfers.value);
+
   return (
     <table>
       <thead>

@@ -1,7 +1,6 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 
-import { $name, $peers } from "./state.ts";
 import {
   decrypt,
   encrypt,
@@ -10,6 +9,8 @@ import {
   privateKey,
   publicKey,
 } from "./crypto.ts";
+import { Peer } from "./peer.ts";
+import { $name, $peers } from "./state.ts";
 
 const jwkSchema = z.record(z.any());
 
@@ -65,8 +66,12 @@ type Data = {
   candidate?: RTCIceCandidate | null;
 };
 
-export const createSignaler = (socket: WebSocket, id: string) => {
-  const publicKey = importPublicKey($peers.peek()[id].publicKey);
+export const createSignaler = (
+  socket: WebSocket,
+  id: string,
+  jwk: JsonWebKey,
+) => {
+  const publicKey = importPublicKey(jwk);
   const send = async (data: Data) => {
     const candidate = data.candidate &&
       await encrypt(await publicKey, JSON.stringify(data.candidate));
@@ -111,7 +116,7 @@ export const createSignaler = (socket: WebSocket, id: string) => {
 
 export const registerClientSocketHandler = async (socket: WebSocket) => {
   const jwk = await exportKey(publicKey);
-  const onopen = () => {
+  socket.onopen = () => {
     const message: ClientMessage = {
       type: "HI",
       name: $name.peek(),
@@ -119,16 +124,15 @@ export const registerClientSocketHandler = async (socket: WebSocket) => {
     };
     socket.send(JSON.stringify(message));
   };
-  const onmessage = (event: MessageEvent) => {
+  socket.onmessage = (event: MessageEvent) => {
     const result = serverMessageSchema.safeParse(JSON.parse(event.data));
     if (!result.success) return;
     const data = result.data;
     if (data.type === "HI") {
       const { name, publicKey, from } = data;
-      $peers.value = {
-        ...$peers.peek(),
-        [from]: { name, publicKey, initiator: true },
-      };
+      const signaler = createSignaler(socket, from, publicKey);
+      const peer = new Peer(from, name, signaler, true);
+      $peers.value = { ...$peers.peek(), [from]: peer };
       const message: ClientMessage = {
         type: "HELLO",
         to: from,
@@ -139,22 +143,21 @@ export const registerClientSocketHandler = async (socket: WebSocket) => {
     }
     if (data.type === "HELLO") {
       const { name, publicKey, from } = data;
-      $peers.value = { ...$peers.peek(), [from]: { name, publicKey } };
+      if ($peers.value[from]) {
+        $peers.value[from].name.value = name;
+      } else {
+        const signaler = createSignaler(socket, from, publicKey);
+        const peer = new Peer(from, name, signaler);
+        $peers.value = { ...$peers.peek(), [from]: peer };
+      }
     }
     if (data.type === "BYE") {
       const temp = $peers.peek();
+      temp[data.from].close();
       delete temp[data.from];
       $peers.value = { ...temp };
     }
   };
-  const onclose = () => {
-    socket.removeEventListener("open", onopen);
-    socket.removeEventListener("message", onmessage);
-    socket.removeEventListener("close", onclose);
-  };
-  socket.addEventListener("open", onopen);
-  socket.addEventListener("message", onmessage);
-  socket.addEventListener("close", onclose);
 };
 
 export const registerServerSocketHandler = (socket: WebSocket) => {

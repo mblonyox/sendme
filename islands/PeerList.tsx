@@ -1,57 +1,49 @@
+import { batch, useComputed } from "@preact/signals";
 import { $peers } from "../lib/state.ts";
 
 export default function PeerList() {
-  const peers = Object.entries($peers.value);
+  const $allCheckboxProps = useComputed(() => {
+    const peers = Object.values($peers.value);
+    const checked = peers.every((p) => p.selected.value) &&
+      peers.some((p) => p.selected.value);
+    const indeterminate = !peers.every((p) => p.selected.value) &&
+      peers.some((p) => p.selected.value);
+    const onClick = () =>
+      batch(() => {
+        peers.forEach((peer) => peer.selected.value = !checked);
+      });
+    return { checked, indeterminate, onClick };
+  });
+
   return (
     <table>
       <thead>
         <tr>
-          <th scope="col">#</th>
-          <th scope="col">Name</th>
-          <th scope="col">Status</th>
           <th scope="col">
             <input
               type="checkbox"
-              checked={peers.every(([_, p]) => p.checked) &&
-                peers.some(([_, p]) => p.checked)}
-              indeterminate={!peers.every(([_, p]) => p.checked) &&
-                peers.some(([_, p]) => p.checked)}
-              onClick={() => {
-                const value = peers.every(([_, p]) => p.checked);
-                $peers.value = Object.fromEntries(
-                  peers.map((
-                    [id, peer],
-                  ) => [id, { ...peer, checked: !value }]),
-                );
-              }}
+              {...$allCheckboxProps.value}
             />
           </th>
+          <th scope="col">Name</th>
+          <th scope="col">Status</th>
         </tr>
       </thead>
       <tbody>
-        {peers.map((
-          [id, peer],
-          index,
-        ) => (
+        {Object.entries($peers.value).map(([id, peer]) => (
           <tr key={id}>
-            <th scope="row">{index + 1}</th>
-            <td>{peer.name}</td>
-            <td>{peer.status}</td>
             <td>
               <input
                 type="checkbox"
-                checked={peer.checked}
-                onClick={() => {
-                  $peers.value = {
-                    ...$peers.peek(),
-                    [id]: { ...peer, checked: !peer.checked },
-                  };
-                }}
+                checked={peer.selected}
+                onClick={() => peer.selected.value = !peer.selected.peek()}
               />
             </td>
+            <td>{peer.name}</td>
+            <td>{peer.state}</td>
           </tr>
         ))}
-        {!peers.length && (
+        {!Object.values($peers.value).length && (
           <tr>
             <td colSpan={4}>
               <h6 className="text-center">

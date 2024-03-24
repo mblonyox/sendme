@@ -1,11 +1,14 @@
-import { useSignal } from "@preact/signals";
+import { useComputed, useSignal } from "@preact/signals";
 import { filesize } from "filesize";
 import { $files, $peers } from "../lib/state.ts";
 
 export default function SendFile() {
   const $open = useSignal(false);
-  const peers = Object.values($peers.value);
-  const count = peers.filter((p) => p.checked).length;
+  const $count = useComputed(() =>
+    Object.values($peers.value)
+      .filter((p) => p.selected.value).length
+  );
+
   return (
     <>
       <input
@@ -14,8 +17,10 @@ export default function SendFile() {
           event.preventDefault();
           $open.value = true;
         }}
-        disabled={!count}
-        value={count ? `Send to ${count} peer(s)` : `No peer selected`}
+        disabled={!$count.value}
+        value={$count.value
+          ? `Send to ${$count.value} peer(s)`
+          : `No peer selected`}
       />
       {$open.value &&
         (
