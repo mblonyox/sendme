@@ -8,6 +8,7 @@ export default defineApp((_request, { Component }) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="color-scheme" content="light dark" />
         <link rel="stylesheet" href="/pico.fuchsia.min.css" />
+        <link rel="stylesheet" href="/styles.css" />
         <title>SendMe</title>
       </head>
       <body>

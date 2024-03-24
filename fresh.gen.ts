@@ -8,8 +8,10 @@ import * as $_middleware from "./routes/_middleware.ts";
 import * as $about from "./routes/about.tsx";
 import * as $index from "./routes/index.tsx";
 import * as $Client from "./islands/Client.tsx";
-import * as $Downloader from "./islands/Downloader.tsx";
-import * as $Uploader from "./islands/Uploader.tsx";
+import * as $NameInput from "./islands/NameInput.tsx";
+import * as $PeerList from "./islands/PeerList.tsx";
+import * as $SendFile from "./islands/SendFile.tsx";
+import * as $TransferList from "./islands/TransferList.tsx";
 import { type Manifest } from "$fresh/server.ts";
 
 const manifest = {
@@ -22,8 +24,10 @@ const manifest = {
   },
   islands: {
     "./islands/Client.tsx": $Client,
-    "./islands/Downloader.tsx": $Downloader,
-    "./islands/Uploader.tsx": $Uploader,
+    "./islands/NameInput.tsx": $NameInput,
+    "./islands/PeerList.tsx": $PeerList,
+    "./islands/SendFile.tsx": $SendFile,
+    "./islands/TransferList.tsx": $TransferList,
   },
   baseUrl: import.meta.url,
 } satisfies Manifest;

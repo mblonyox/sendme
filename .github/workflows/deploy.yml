@@ -24,13 +24,13 @@ jobs:
           deno-version: v1.x
 
       - name: Cache step
-        run: "deno cache main.ts"
+        run: "deno cache main.ts dev.ts"
 
       - name: Check step
         run: "deno task check"
 
       - name: Build step
-        run: "deno task check && deno task build"
+        run: "deno task build"
 
       - name: Upload to Deno Deploy
         uses: denoland/deployctl@v1

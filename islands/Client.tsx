@@ -4,7 +4,11 @@ import { useEffect, useRef } from "preact/hooks";
 
 import { registerClientSocketHandler } from "../lib/socket.ts";
 import { createPeerConnection } from "../lib/peer.ts";
-import { $name, $peers } from "../lib/state.ts";
+import { $peers } from "../lib/state.ts";
+import NameInput from "./NameInput.tsx";
+import PeerList from "./PeerList.tsx";
+import SendFile from "./SendFile.tsx";
+import TransferList from "./TransferList.tsx";
 
 export default function Client() {
   const socketRef = useRef<WebSocket>();
@@ -27,51 +31,27 @@ export default function Client() {
       }
     }
     for (const [id, ref] of pcMapRef.current.entries()) {
-      if (!peerIds.includes(id)) ref.deref()?.close();
+      if (!peerIds.includes(id)) {
+        ref.deref()?.close();
+        pcMapRef.current.delete(id);
+      }
     }
   });
 
   return (
-    <div className="grid">
-      <div>
-        <h2>Name</h2>
-        <article>
-          <fieldset role="group">
-            <input
-              type="text"
-              name="name"
-              id="nameInput"
-              autoComplete="name"
-              onChange={(event) => $name.value = event.currentTarget.value}
-              value={$name}
-            />
-            <input type="submit" value="Rename" />
-          </fieldset>
-        </article>
-      </div>
-      <div>
+    <>
+      <section>
         <h2>Peers</h2>
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">#</th>
-              <th scope="col">Name</th>
-              <th scope="col">Status</th>
-              <th scope="col">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.values($peers.value).map(({ name, status }, index) => (
-              <tr>
-                <th scope="row">{index + 1}</th>
-                <td>{name}</td>
-                <td>{status}</td>
-                <td></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+        <div className="grid">
+          <NameInput />
+          <SendFile />
+        </div>
+        <PeerList />
+      </section>
+      <section>
+        <h2>Transfers</h2>
+        <TransferList />
+      </section>
+    </>
   );
 }

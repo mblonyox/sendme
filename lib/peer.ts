@@ -8,6 +8,7 @@ export type PeerInfo = {
   publicKey: JsonWebKey;
   initiator?: boolean;
   status?: string;
+  checked?: boolean;
 };
 
 const handleNegotiation = (
