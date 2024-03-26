@@ -1,4 +1,3 @@
-import { nanoid } from "nanoid";
 import { z } from "zod";
 
 import {
@@ -131,7 +130,7 @@ export const registerClientSocketHandler = async (socket: WebSocket) => {
     if (data.type === "HI") {
       const { name, publicKey, from } = data;
       const signaler = createSignaler(socket, from, publicKey);
-      const peer = new Peer(from, name, signaler, true);
+      const peer = new Peer(name, signaler, true);
       $peers.value = { ...$peers.peek(), [from]: peer };
       const message: ClientMessage = {
         type: "HELLO",
@@ -147,7 +146,7 @@ export const registerClientSocketHandler = async (socket: WebSocket) => {
         $peers.value[from].name.value = name;
       } else {
         const signaler = createSignaler(socket, from, publicKey);
-        const peer = new Peer(from, name, signaler);
+        const peer = new Peer(name, signaler);
         $peers.value = { ...$peers.peek(), [from]: peer };
       }
     }
@@ -161,7 +160,7 @@ export const registerClientSocketHandler = async (socket: WebSocket) => {
 };
 
 export const registerServerSocketHandler = (socket: WebSocket) => {
-  const id = nanoid();
+  const id = crypto.randomUUID();
   const globalChannel = new BroadcastChannel("global");
   const clientChannel = new BroadcastChannel(`client:${id}`);
   socket.onopen = () => {

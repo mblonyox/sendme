@@ -1,5 +1,6 @@
-import { useComputed, useSignal } from "@preact/signals";
+import { batch, useComputed, useSignal } from "@preact/signals";
 import { filesize } from "filesize";
+
 import { $files, $peers } from "../lib/state.ts";
 
 export default function SendFile() {
@@ -61,12 +62,31 @@ export default function SendFile() {
                   className="secondary"
                   onClick={(event) => {
                     event.preventDefault();
-                    $open.value = false;
+                    batch(() => {
+                      $files.value = [];
+                      $open.value = false;
+                    });
                   }}
                 >
                   Cancel
                 </button>
                 <button
+                  onClick={(event) => {
+                    event.preventDefault();
+                    batch(() => {
+                      Object.values($peers.value)
+                        .forEach((p) => {
+                          if (p.selected.peek()) {
+                            $files.peek().forEach((file) =>
+                              p.createTransfer(file)
+                            );
+                            p.selected.value = false;
+                          }
+                        });
+                      $files.value = [];
+                      $open.value = false;
+                    });
+                  }}
                   disabled={!$files.value.length}
                 >
                   Send
