@@ -1,17 +1,16 @@
 import { filesize } from "filesize";
-import { useComputed } from "@preact/signals";
 
 import { $peers } from "../lib/state.ts";
 
 export default function TransferList() {
-  const fileTransfers = useComputed(() =>
-    Object.values($peers.value).flatMap((peer) =>
-      Object.values(peer.fileTransfers.value).map((fileTransfer) => ({
-        peer,
-        fileTransfer,
-      }))
-    )
-  );
+  const fileTransfers = Object.values($peers.value)
+    .flatMap((peer) =>
+      Object.values(peer.fileTransfers.value)
+        .map((fileTransfer) => ({
+          peer,
+          fileTransfer,
+        }))
+    );
 
   return (
     <table>
@@ -24,7 +23,7 @@ export default function TransferList() {
         </tr>
       </thead>
       <tbody>
-        {fileTransfers.value.map(({ fileTransfer, peer }) => (
+        {fileTransfers.map(({ fileTransfer, peer }) => (
           <tr>
             <td>
               {fileTransfer.file.name} -{" "}
@@ -88,7 +87,7 @@ export default function TransferList() {
             </td>
           </tr>
         ))}
-        {!fileTransfers.value.length && (
+        {!fileTransfers.length && (
           <tr>
             <td colSpan={4}>
               <h6 className="text-center">
