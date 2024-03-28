@@ -1,4 +1,5 @@
 import { useRef } from "preact/hooks";
+
 import { $name } from "../lib/state.ts";
 
 export default function NameInput() {
@@ -13,6 +14,11 @@ export default function NameInput() {
         autoComplete="name"
         value={$name}
         ref={inputRef}
+        onKeyUp={(event) => {
+          if (event.key === "Enter") {
+            $name.value = event.currentTarget.value;
+          }
+        }}
       />
       <input
         type="submit"
@@ -20,7 +26,7 @@ export default function NameInput() {
         onClick={(event) => {
           event.preventDefault();
           if (inputRef.current) {
-            $name.value = inputRef.current?.value;
+            $name.value = inputRef.current.value;
           }
         }}
       />
