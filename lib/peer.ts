@@ -7,8 +7,8 @@ import { FileTransfer } from "./file-transfer.ts";
 export class Peer {
   private pc: RTCPeerConnection;
   name: Signal<string>;
-  state: Signal<string>;
   selected: Signal<boolean>;
+  state: Signal<RTCPeerConnectionState>;
   fileTransfers: Signal<FileTransfer[]>;
 
   constructor(
@@ -31,12 +31,12 @@ export class Peer {
   private handleNegotiation(signaler: Signaler, initiator?: boolean) {
     let makingOffer = false;
     let ignoreOffer = false;
-    this.pc.onicecandidate = async ({ candidate }) => {
+    const onicecandidate = async ({ candidate }: RTCPeerConnectionIceEvent) => {
       if (candidate) {
         await signaler.send({ candidate });
       }
     };
-    this.pc.onnegotiationneeded = async () => {
+    const onnegotiationneeded = async () => {
       try {
         makingOffer = true;
         await this.pc.setLocalDescription();
@@ -47,7 +47,7 @@ export class Peer {
         makingOffer = false;
       }
     };
-    this.pc.oniceconnectionstatechange = () => {
+    const oniceconnectionstatechange = () => {
       if (this.pc.iceConnectionState === "failed") {
         this.pc.restartIce();
       }
@@ -80,31 +80,21 @@ export class Peer {
     const onclose = () => {
       if (this.pc.connectionState === "closed") {
         signaler.destroy();
+        this.pc.removeEventListener("icecandidate", onicecandidate);
+        this.pc.removeEventListener("negotiationneeded", onnegotiationneeded);
+        this.pc.removeEventListener(
+          "iceconnectionstatechange",
+          oniceconnectionstatechange,
+        );
         this.pc.removeEventListener("connectionstatechange", onclose);
       }
     };
-    this.pc.addEventListener("connectionstatechange", onclose);
-  }
-
-  private pingCheck() {
-    let timerId: number;
-    const pingChannel = this.pc.createDataChannel("ping", {
-      negotiated: true,
-      id: 0,
-    });
-    pingChannel.onopen = () => {
-      timerId = setInterval(() => pingChannel.send("ping"), 5000);
-    };
-    pingChannel.onmessage = (event) => {
-      if (event.data === "ping") pingChannel.send("pong");
-    };
-    pingChannel.onclose = () => clearInterval(timerId);
-    const onclose = () => {
-      if (this.pc.connectionState === "closed") {
-        pingChannel.close();
-        this.pc.removeEventListener("connectionstatechange", onclose);
-      }
-    };
+    this.pc.addEventListener("icecandidate", onicecandidate);
+    this.pc.addEventListener("negotiationneeded", onnegotiationneeded);
+    this.pc.addEventListener(
+      "iceconnectionstatechange",
+      oniceconnectionstatechange,
+    );
     this.pc.addEventListener("connectionstatechange", onclose);
   }
 
@@ -138,6 +128,28 @@ export class Peer {
       }
     };
     this.pc.addEventListener("datachannel", ondatachannel);
+    this.pc.addEventListener("connectionstatechange", onclose);
+  }
+
+  private pingCheck() {
+    let timerId: number;
+    const pingChannel = this.pc.createDataChannel("ping", {
+      negotiated: true,
+      id: 0,
+    });
+    pingChannel.onopen = () => {
+      timerId = setInterval(() => pingChannel.send("ping"), 5000);
+    };
+    pingChannel.onmessage = (event) => {
+      if (event.data === "ping") pingChannel.send("pong");
+    };
+    pingChannel.onclose = () => clearInterval(timerId);
+    const onclose = () => {
+      if (this.pc.connectionState === "closed") {
+        pingChannel.close();
+        this.pc.removeEventListener("connectionstatechange", onclose);
+      }
+    };
     this.pc.addEventListener("connectionstatechange", onclose);
   }
 

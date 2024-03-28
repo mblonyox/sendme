@@ -1,3 +1,4 @@
+import { effect } from "@preact/signals";
 import { z } from "zod";
 
 import {
@@ -26,6 +27,10 @@ const clientMessageSchema = z.union([
     publicKey: jwkSchema,
   }),
   z.object({
+    type: z.literal("RENAME"),
+    name: z.string(),
+  }),
+  z.object({
     type: z.literal("SIGNAL"),
     to: z.string(),
     description: z.string().optional().nullable(),
@@ -45,6 +50,11 @@ const serverMessageSchema = z.union([
     from: z.string(),
     name: z.string(),
     publicKey: jwkSchema,
+  }),
+  z.object({
+    type: z.literal("RENAME"),
+    from: z.string(),
+    name: z.string(),
   }),
   z.object({
     type: z.literal("SIGNAL"),
@@ -115,6 +125,15 @@ export const createSignaler = (
 
 export const registerClientSocketHandler = async (socket: WebSocket) => {
   const jwk = await exportKey(publicKey);
+  const unsubsribe = effect(() => {
+    if ($name.value && socket.readyState === socket.OPEN) {
+      const message: ClientMessage = {
+        type: "RENAME",
+        name: $name.peek(),
+      };
+      socket.send(JSON.stringify(message));
+    }
+  });
   socket.onopen = () => {
     const message: ClientMessage = {
       type: "HI",
@@ -142,21 +161,27 @@ export const registerClientSocketHandler = async (socket: WebSocket) => {
     }
     if (data.type === "HELLO") {
       const { name, publicKey, from } = data;
-      if ($peers.value[from]) {
-        $peers.value[from].name.value = name;
-      } else {
+      const peers = $peers.peek();
+      if (!peers[from]) {
         const signaler = createSignaler(socket, from, publicKey);
         const peer = new Peer(name, signaler);
-        $peers.value = { ...$peers.peek(), [from]: peer };
+        $peers.value = { ...peers, [from]: peer };
       }
     }
+    if (data.type === "RENAME") {
+      const { name, from } = data;
+      const peer = $peers.peek()[from];
+      if (peer) peer.name.value = name;
+    }
     if (data.type === "BYE") {
-      const temp = $peers.peek();
-      temp[data.from].close();
-      delete temp[data.from];
-      $peers.value = { ...temp };
+      const { from } = data;
+      const peers = $peers.peek();
+      peers[from].close();
+      delete peers[from];
+      $peers.value = { ...peers };
     }
   };
+  socket.onclose = () => unsubsribe();
 };
 
 export const registerServerSocketHandler = (socket: WebSocket) => {
@@ -174,7 +199,8 @@ export const registerServerSocketHandler = (socket: WebSocket) => {
     if (!result.success) return;
     const data = result.data;
     switch (data.type) {
-      case "HI": {
+      case "HI":
+      case "RENAME": {
         const message: ServerMessage = { ...data, from: id };
         globalChannel.postMessage(message);
         break;
@@ -184,6 +210,7 @@ export const registerServerSocketHandler = (socket: WebSocket) => {
         const channel = new BroadcastChannel(`client:${to}`);
         const message: ServerMessage = { ...hello, from: id };
         channel.postMessage(message);
+        channel.close();
         break;
       }
       case "SIGNAL": {
