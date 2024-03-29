@@ -1,66 +1,71 @@
 import { decodeBase64, encodeBase64 } from "$std/encoding/base64.ts";
 
-function* chunks(arr: Uint8Array, n: number): Generator<Uint8Array, void> {
-  for (let i = 0; i < arr.length; i += n) {
-    yield arr.slice(i, i + n);
-  }
-}
-
-const ALGORITHM = "RSA-OAEP";
-const HASH = "SHA-256";
-
-export const generateKey = () =>
+export const generateRsaKey = () =>
   crypto.subtle.generateKey(
     {
-      name: ALGORITHM,
+      name: "RSA-OAEP",
       modulusLength: 4096,
       publicExponent: new Uint8Array([1, 0, 1]),
-      hash: HASH,
+      hash: "SHA-256",
     },
+    true,
+    ["wrapKey", "unwrapKey"],
+  );
+
+export const exportPublicKey = (key: CryptoKey) =>
+  crypto.subtle.exportKey("spki", key)
+    .then((v) => encodeBase64(v));
+
+export const importPublicKey = (text: string) =>
+  crypto.subtle.importKey(
+    "spki",
+    decodeBase64(text),
+    { name: "RSA-OAEP", hash: "SHA-256" },
+    true,
+    ["wrapKey"],
+  );
+
+export const generateAesKey = () =>
+  crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 },
     true,
     ["encrypt", "decrypt"],
   );
 
-export const exportKey = (key: CryptoKey) =>
-  crypto.subtle.exportKey("jwk", key);
+export const wrapSharedKey = (key: CryptoKey, wrappingKey: CryptoKey) =>
+  crypto.subtle.wrapKey("raw", key, wrappingKey, { name: "RSA-OAEP" })
+    .then(encodeBase64);
 
-export const importPublicKey = (jsonPublicKey: JsonWebKey) =>
-  crypto.subtle.importKey(
-    "jwk",
-    jsonPublicKey,
-    { name: ALGORITHM, hash: HASH },
+export const unwrapSharedKey = (
+  encoded: string,
+  unwrappingKey: CryptoKey,
+) =>
+  crypto.subtle.unwrapKey(
+    "raw",
+    decodeBase64(encoded),
+    unwrappingKey,
+    { name: "RSA-OAEP" },
+    { name: "AES-GCM", length: 256 },
     true,
-    ["encrypt"],
+    ["encrypt", "decrypt"],
   );
 
-export const encrypt = async (publicKey: CryptoKey, payload: string) => {
-  const buffer = new TextEncoder().encode(payload);
-  const chunked = Array.from(chunks(buffer, 190));
-  const encrypteds = await Promise.all(
-    chunked.map((chunk) =>
-      crypto.subtle.encrypt(
-        { name: ALGORITHM },
-        publicKey,
-        chunk,
-      ).then((bytes) => encodeBase64(bytes))
-    ),
+export const encrypt = async (key: CryptoKey, plaintext: string) => {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    new TextEncoder().encode(plaintext),
   );
-  return encrypteds.join("\n");
+  return [iv, encrypted].map(encodeBase64).join(".");
 };
 
-export const decrypt = async (privateKey: CryptoKey, cipher: string) => {
-  const decrypteds = await Promise.all(
-    cipher.split("\n")
-      .map((text) => decodeBase64(text))
-      .map((bytes) =>
-        crypto.subtle.decrypt(
-          { name: ALGORITHM },
-          privateKey,
-          bytes,
-        ).then((bytes) => new TextDecoder().decode(bytes))
-      ),
+export const decrypt = async (key: CryptoKey, ciphertext: string) => {
+  const [iv, encrypted] = ciphertext.split(".").map(decodeBase64);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encrypted,
   );
-  return decrypteds.join("");
+  return new TextDecoder().decode(decrypted);
 };
-
-export const { privateKey, publicKey } = await generateKey();

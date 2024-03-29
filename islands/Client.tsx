@@ -1,5 +1,6 @@
-import { WebSocket as ReconnectingWebSocket } from "partysocket";
+import { WebSocket } from "partysocket";
 import { useEffect } from "preact/hooks";
+import { IS_BROWSER } from "$fresh/runtime.ts";
 
 import { registerClientSocketHandler } from "../lib/socket.ts";
 
@@ -10,9 +11,10 @@ import TransferList from "./TransferList.tsx";
 
 export default function Client() {
   useEffect(() => {
+    if (!IS_BROWSER) return;
     const socketUrl = document.URL.replace("http", "ws");
-    const socket = new ReconnectingWebSocket(socketUrl);
-    registerClientSocketHandler(socket as WebSocket);
+    const socket = new WebSocket(socketUrl);
+    registerClientSocketHandler(socket);
     return () => socket.close();
   }, []);
 

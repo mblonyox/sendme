@@ -1,30 +1,31 @@
 import { effect } from "@preact/signals";
+import { WebSocket as ReconnectingWebSocket } from "partysocket";
 import { z } from "zod";
 
 import {
   decrypt,
   encrypt,
-  exportKey,
+  exportPublicKey,
+  generateAesKey,
+  generateRsaKey,
   importPublicKey,
-  privateKey,
-  publicKey,
+  unwrapSharedKey,
+  wrapSharedKey,
 } from "./crypto.ts";
 import { Peer } from "./peer.ts";
 import { $name, $peers } from "./state.ts";
-
-const jwkSchema = z.record(z.any());
 
 const clientMessageSchema = z.union([
   z.object({
     type: z.literal("HI"),
     name: z.string(),
-    publicKey: jwkSchema,
+    key: z.string(),
   }),
   z.object({
     type: z.literal("HELLO"),
     to: z.string(),
     name: z.string(),
-    publicKey: jwkSchema,
+    key: z.string(),
   }),
   z.object({
     type: z.literal("RENAME"),
@@ -43,13 +44,13 @@ const serverMessageSchema = z.union([
     type: z.literal("HI"),
     from: z.string(),
     name: z.string(),
-    publicKey: jwkSchema,
+    key: z.string(),
   }),
   z.object({
     type: z.literal("HELLO"),
     from: z.string(),
     name: z.string(),
-    publicKey: jwkSchema,
+    key: z.string(),
   }),
   z.object({
     type: z.literal("RENAME"),
@@ -76,16 +77,15 @@ type Data = {
 };
 
 export const createSignaler = (
-  socket: WebSocket,
+  socket: ReconnectingWebSocket,
   id: string,
-  jwk: JsonWebKey,
+  key: CryptoKey,
 ) => {
-  const publicKey = importPublicKey(jwk);
   const send = async (data: Data) => {
     const candidate = data.candidate &&
-      await encrypt(await publicKey, JSON.stringify(data.candidate));
+      await encrypt(key, JSON.stringify(data.candidate));
     const description = data.description &&
-      await encrypt(await publicKey, JSON.stringify(data.description));
+      await encrypt(key, JSON.stringify(data.description));
     const message: ClientMessage = {
       type: "SIGNAL",
       to: id,
@@ -101,11 +101,9 @@ export const createSignaler = (
     const data = result.data;
     if (data.type !== "SIGNAL" || data.from !== id) return;
     const candidate = data.candidate &&
-      await decrypt(privateKey, data.candidate)
-        .then((text) => JSON.parse(text));
+      await decrypt(key, data.candidate).then(JSON.parse);
     const description = data.description &&
-      await decrypt(privateKey, data.description)
-        .then((text) => JSON.parse(text));
+      await decrypt(key, data.description).then(JSON.parse);
     await callback({ description, candidate });
   };
   const onclose = () => {
@@ -123,8 +121,12 @@ export const createSignaler = (
   };
 };
 
-export const registerClientSocketHandler = async (socket: WebSocket) => {
-  const jwk = await exportKey(publicKey);
+export const registerClientSocketHandler = (
+  socket: ReconnectingWebSocket,
+) => {
+  const rsaKey = generateRsaKey();
+  const exportedKey = rsaKey
+    .then(({ publicKey }) => exportPublicKey(publicKey));
   const unsubsribe = effect(() => {
     if ($name.value && socket.readyState === socket.OPEN) {
       const message: ClientMessage = {
@@ -134,38 +136,43 @@ export const registerClientSocketHandler = async (socket: WebSocket) => {
       socket.send(JSON.stringify(message));
     }
   });
-  socket.onopen = () => {
+  socket.onopen = async () => {
     const message: ClientMessage = {
       type: "HI",
       name: $name.peek(),
-      publicKey: jwk,
+      key: await exportedKey,
     };
     socket.send(JSON.stringify(message));
   };
-  socket.onmessage = (event: MessageEvent) => {
+  socket.onmessage = async (event: MessageEvent) => {
     const result = serverMessageSchema.safeParse(JSON.parse(event.data));
     if (!result.success) return;
     const data = result.data;
     if (data.type === "HI") {
-      const { name, publicKey, from } = data;
-      const signaler = createSignaler(socket, from, publicKey);
+      const { name, key, from } = data;
+      const sharedKey = await generateAesKey();
+      const signaler = createSignaler(socket, from, sharedKey);
       const peer = new Peer(name, signaler, true);
       $peers.value = { ...$peers.peek(), [from]: peer };
+      // Reply with HELLO message.
+      const importedKey = await importPublicKey(key);
+      const wrappedKey = await wrapSharedKey(sharedKey, importedKey);
       const message: ClientMessage = {
         type: "HELLO",
         to: from,
         name: $name.peek(),
-        publicKey: jwk,
+        key: wrappedKey,
       };
       socket.send(JSON.stringify(message));
     }
     if (data.type === "HELLO") {
-      const { name, publicKey, from } = data;
-      const peers = $peers.peek();
-      if (!peers[from]) {
-        const signaler = createSignaler(socket, from, publicKey);
+      const { name, key, from } = data;
+      if (!$peers.peek()[from]) {
+        const privateKey = (await rsaKey).privateKey;
+        const sharedKey = await unwrapSharedKey(key, privateKey);
+        const signaler = createSignaler(socket, from, sharedKey);
         const peer = new Peer(name, signaler);
-        $peers.value = { ...peers, [from]: peer };
+        $peers.value = { ...$peers.peek(), [from]: peer };
       }
     }
     if (data.type === "RENAME") {
@@ -176,8 +183,10 @@ export const registerClientSocketHandler = async (socket: WebSocket) => {
     if (data.type === "BYE") {
       const { from } = data;
       const peers = $peers.peek();
-      peers[from].close();
-      delete peers[from];
+      if (peers[from]) {
+        peers[from].close();
+        delete peers[from];
+      }
       $peers.value = { ...peers };
     }
   };
